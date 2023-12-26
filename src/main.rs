@@ -1,21 +1,30 @@
-use clap::Parser;
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg(short, long, default_value = "")]
-    server_name: String,
-}
+use clap::{command, Arg};
 
 fn main() {
-    let args = Args::parse();
+    let match_result = command!()
+    .arg(
+        Arg::new("remote_url")
+            .help("the remote URL to connect to (client mode only)")
+    )
+    .arg(
+        Arg::new("remote_port")
+            .short('r')
+            .long("remote-port")
+    )
+    .arg(
+        Arg::new("local_port")
+            .short('l')
+            .long("local-port")
+    )
+    .get_matches();
 
-    if args.server_name.is_empty() {
-        println!("running as a server");
-        return;
+    let is_client_mode = match_result.contains_id("remote_url");
+    if is_client_mode {
+        let remote_url = match_result.get_one::<String>("remote_url").unwrap();
+        println!("remote_url is {} -- client mode enabled", remote_url);
     }
     else {
-        println!("running as a client");
-        return;
+        println!("remote_url is empty -- server mode enabled");
+    
     }
 }
