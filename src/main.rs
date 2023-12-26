@@ -1,4 +1,6 @@
 use clap::{command, Arg};
+use log::{info, LevelFilter};
+use env_logger::Builder;
 
 fn main() {
     let match_result = command!()
@@ -38,4 +40,13 @@ fn main() {
 
     let local_port = match_result.get_one::<u16>("local_port").unwrap();
     println!("local_port is {}", local_port);
+
+    // Initialize the logger (env_logger)
+    let mut builder = Builder::new();
+    builder.format_timestamp_micros();
+    builder.filter_level(LevelFilter::Info);
+    builder.target(env_logger::Target::Stdout);
+    builder.init();
+
+    info!("application start");
 }
