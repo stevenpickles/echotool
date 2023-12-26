@@ -9,4 +9,4 @@ edition = "2021"
 clap = { version = "4.4.11", features = ["cargo"] }
 env_logger = "0.10.1"
 log = "0.4.20"
-tokio = { version = "1.35.1", features = ["net", "signal", "time"] }
+tokio = { version = "1.35.1", features = ["full"] }
