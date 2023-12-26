@@ -1,6 +1,13 @@
 use clap::{command, Arg};
+use log::{info, error, LevelFilter};
+use env_logger::Builder;
+use tokio::net::UdpSocket;
+use tokio::signal;
+use tokio::time::{sleep, Duration};
 
-fn main() {
+
+#[tokio::main]
+async fn main() {
     let match_result = command!()
     .arg(
         Arg::new("remote_url")
@@ -38,4 +45,71 @@ fn main() {
 
     let local_port = match_result.get_one::<u16>("local_port").unwrap();
     println!("local_port is {}", local_port);
+
+    // Initialize the logger (env_logger)
+    let mut builder = Builder::new();
+    builder.format_timestamp_micros();
+    builder.filter_level(LevelFilter::Info);
+    builder.target(env_logger::Target::Stdout);
+    builder.init();
+
+    info!("application start");
+
+    if is_client_mode {
+        let client_task: tokio::task::JoinHandle<()> = tokio::spawn( client_thread() );
+        signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
+        client_task.abort();
+    }
+    else {
+        let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port) );
+        signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
+        server_task.abort();
+    }
+
+
+
+    sleep(Duration::from_millis(2500)).await;
+
+    info!("application end");
+    
+}
+
+async fn server_thread(local_port: u16) {
+    info!("server start");
+
+    let addr = format!( "0.0.0.0:{}", local_port );
+    let socket = UdpSocket::bind(&addr).await.expect( "failed to bind socket" );
+    info!("server listening on {}", addr);
+
+    let mut buf: [u8; 65536] = [0u8; 65536];
+    let mut count = 0;
+
+    
+
+    loop {
+        tokio::select! {
+            recv_result = socket.recv_from(&mut buf) => match recv_result {
+                Ok((size, src)) => {
+                    count += 1;
+                    info!("[{}] received {} bytes from {}", count, size, src);
+                    socket.send_to(&buf[0..size], &src).await.expect("failed to send data");
+                }
+                Err(e) => {
+                    error!("error while receiving data: {}", e);
+                }
+            },
+            _ = tokio::signal::ctrl_c() => {
+                info!("detected ctrl+c, shutting down...");
+                break;
+            }
+        }
+    }
+
+    info!("server stop")
+}
+
+async fn client_thread() {
+    info!("client start");
+
+    info!("client stop")
 }
