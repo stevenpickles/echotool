@@ -28,6 +28,12 @@ async fn main() {
             .value_parser(clap::value_parser!(u16).range(1..))
             .default_value("7")
     )
+    .arg(
+        Arg::new("data_payload")
+            .short('d')
+            .long("data_payload")
+            .default_value("Hello World!")
+    )
     .get_matches();
 
     let mut remote_url = "";
@@ -47,6 +53,8 @@ async fn main() {
     let local_port = match_result.get_one::<u16>("local_port").unwrap();
     println!("local_port is {}", local_port);
 
+    let data_payload = match_result.get_one::<String>("data_payload").unwrap();
+
     // Initialize the logger (env_logger)
     let mut builder = Builder::new();
     builder.format_timestamp_micros();
@@ -57,10 +65,7 @@ async fn main() {
     info!("application start");
 
     if is_client_mode {
-        // let client_task: tokio::task::JoinHandle<()> = tokio::spawn( client_thread( remote_url.to_string(), *remote_port, *local_port ) );
-        // signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
-        // client_task.abort();
-        client_task( remote_url.to_string(), *remote_port, *local_port ).await;
+        client_task( remote_url.to_string(), *remote_port, *local_port, data_payload.to_string() ).await;
     }
     else {
         let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port ) );
@@ -107,7 +112,7 @@ async fn server_thread(local_port: u16) {
     info!("server stop")
 }
 
-async fn client_task(remote_url: String, remote_port: u16, local_port: u16) {
+async fn client_task(remote_url: String, remote_port: u16, local_port: u16, data_payload: String) {
     info!("client start");
 
     // Specify the local and remote addresses
@@ -115,7 +120,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16) {
     let remote_addr = format!( "{}:{}", remote_url, remote_port );
 
     // Specify the payload for the UDP packet
-    let payload = b"1234567890";
+    let payload = data_payload.as_bytes();
 
     // Call the function to send and receive the UDP echo packet
     if let Err(e) = send_receive_udp_echo_packet(local_addr, remote_addr, payload).await {
