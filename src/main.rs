@@ -41,28 +41,14 @@ async fn main() {
             .value_parser(clap::value_parser!(u32))
             .default_value("5")
     )
+    .arg(
+        Arg::new("timeout_in_seconds")
+            .short('t')
+            .long("timeout")
+            .value_parser(clap::value_parser!(f32))
+            .default_value("1.0")
+    )
     .get_matches();
-
-    let mut remote_url = "";
-    let is_client_mode = match_result.contains_id("remote_url");
-    if is_client_mode {
-        remote_url = match_result.get_one::<String>("remote_url").unwrap();
-        println!("remote_url is {} -- client mode enabled", remote_url);
-    }
-    else {
-        println!("remote_url is empty -- server mode enabled");
-    
-    }
-
-    let remote_port = match_result.get_one::<u16>("remote_port").unwrap();
-    println!("remote_port is {}", remote_port);
-
-    let local_port = match_result.get_one::<u16>("local_port").unwrap();
-    println!("local_port is {}", local_port);
-
-    let data_payload = match_result.get_one::<String>("data_payload").unwrap();
-
-    let count = match_result.get_one::<u32>("count").unwrap();
 
     // Initialize the logger (env_logger)
     let mut builder = Builder::new();
@@ -71,10 +57,39 @@ async fn main() {
     builder.target(env_logger::Target::Stdout);
     builder.init();
 
+    let mut remote_url = "";
+    let is_client_mode = match_result.contains_id("remote_url");
+    if is_client_mode {
+        remote_url = match_result.get_one::<String>("remote_url").unwrap();
+        info!("remote_url is {} -- client mode enabled", remote_url);
+    }
+    else {
+        info!("remote_url is empty -- server mode enabled");
+    
+    }
+
+    let remote_port = match_result.get_one::<u16>("remote_port").unwrap();
+    info!("remote_port is {}", remote_port);
+
+    let local_port = match_result.get_one::<u16>("local_port").unwrap();
+    info!("local_port is {}", local_port);
+
+    let data_payload = match_result.get_one::<String>("data_payload").unwrap();
+    info!("data_payload is {}", data_payload);
+
+    let count = match_result.get_one::<u32>("count").unwrap();
+    info!("count is {}", count);
+
+    let mut timeout_in_seconds = match_result.get_one::<f32>("timeout_in_seconds").unwrap();
+    if timeout_in_seconds < &0.2 {
+        timeout_in_seconds = &0.2;
+    }
+    info!("timeout_in_seconds is {}", timeout_in_seconds);
+
     info!("application start");
 
     if is_client_mode {
-        client_task( remote_url.to_string(), *remote_port, *local_port, *count, data_payload.to_string() ).await;
+        client_task( remote_url.to_string(), *remote_port, *local_port, *count, *timeout_in_seconds, data_payload.to_string() ).await;
     }
     else {
         let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port ) );
@@ -121,7 +136,7 @@ async fn server_thread(local_port: u16) {
     info!("server stop")
 }
 
-async fn client_task(remote_url: String, remote_port: u16, local_port: u16, count: u32, data_payload: String) {
+async fn client_task(remote_url: String, remote_port: u16, local_port: u16, count: u32, timeout_in_seconds: f32, data_payload: String) {
     info!("client start");
 
     // Specify the local and remote addresses
@@ -134,7 +149,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
     // Call the function to send and receive the UDP echo packet
     if count == 0 {
         loop {
-            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
+            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload, timeout_in_seconds).await {
                 error!("Error: {}", e);
             }
             sleep(Duration::from_millis(100)).await;
@@ -142,7 +157,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
     }
     else {
         for _i in 0..count {
-            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
+            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload, timeout_in_seconds).await {
                 error!("Error: {}", e);
             }
             sleep(Duration::from_millis(100)).await;
@@ -158,6 +173,7 @@ async fn send_receive_udp_echo_packet(
     local_addr: String,
     remote_addr: String,
     payload: &[u8],
+    timeout_in_seconds: f32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create a UDP socket bound to the specified local address
     let socket = UdpSocket::bind(local_addr).await?;
@@ -171,7 +187,7 @@ async fn send_receive_udp_echo_packet(
 
     // Receive the response from the server
     info!("receiving response...");
-    let result = timeout(Duration::from_millis(500), socket.recv_from(&mut buf)).await;
+    let result = timeout(Duration::from_secs_f32(timeout_in_seconds), socket.recv_from(&mut buf)).await;
 
     match result {
         Ok(Ok((num_bytes, _))) => {
@@ -187,7 +203,7 @@ async fn send_receive_udp_echo_packet(
             error!("error receiving data: {}", e);
         }
         Err(_) => {
-            error!("timeout: no response received within 0.5 seconds");
+            error!("timeout: no response received within {} seconds", timeout_in_seconds);
         }
     }
 
