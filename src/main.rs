@@ -5,16 +5,21 @@ fn main() {
     .arg(
         Arg::new("remote_url")
             .help("the remote URL to connect to (client mode only)")
+            .display_order(1)
     )
     .arg(
         Arg::new("remote_port")
             .short('r')
-            .long("remote-port")
+            .long("remote_port")
+            .value_parser(clap::value_parser!(u16).range(1..))
+            .default_value("7")
     )
     .arg(
         Arg::new("local_port")
             .short('l')
-            .long("local-port")
+            .long("local_port")
+            .value_parser(clap::value_parser!(u16).range(1..))
+            .default_value("7")
     )
     .get_matches();
 
@@ -27,4 +32,10 @@ fn main() {
         println!("remote_url is empty -- server mode enabled");
     
     }
+
+    let remote_port = match_result.get_one::<u16>("remote_port").unwrap();
+    println!("remote_port is {}", remote_port);
+
+    let local_port = match_result.get_one::<u16>("local_port").unwrap();
+    println!("local_port is {}", local_port);
 }
