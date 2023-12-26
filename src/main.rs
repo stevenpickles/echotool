@@ -132,12 +132,23 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
     let payload = data_payload.as_bytes();
 
     // Call the function to send and receive the UDP echo packet
-    for _i in 0..count {
-        if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
-            error!("Error: {}", e);
+    if count == 0 {
+        loop {
+            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
+                error!("Error: {}", e);
+            }
+            sleep(Duration::from_millis(1000)).await;
         }
-        sleep(Duration::from_millis(1000)).await;
     }
+    else {
+        for _i in 0..count {
+            if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
+                error!("Error: {}", e);
+            }
+            sleep(Duration::from_millis(1000)).await;
+        }
+    }
+
 
     info!("client stop")
 }
