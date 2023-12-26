@@ -92,6 +92,7 @@ async fn server_thread(local_port: u16) {
                 Ok((size, src)) => {
                     count += 1;
                     info!("[{}] received {} bytes from {}", count, size, src);
+                    socket.send_to(&buf[0..size], &src).await.expect("failed to send data");
                 }
                 Err(e) => {
                     error!("error while receiving data: {}", e);
