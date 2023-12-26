@@ -3,7 +3,7 @@ use log::{info, error, LevelFilter};
 use env_logger::Builder;
 use tokio::net::UdpSocket;
 use tokio::signal;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, timeout, Duration};
 
 
 #[tokio::main]
@@ -137,7 +137,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
             if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
                 error!("Error: {}", e);
             }
-            sleep(Duration::from_millis(1000)).await;
+            sleep(Duration::from_millis(100)).await;
         }
     }
     else {
@@ -145,7 +145,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
             if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
                 error!("Error: {}", e);
             }
-            sleep(Duration::from_millis(1000)).await;
+            sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -171,15 +171,24 @@ async fn send_receive_udp_echo_packet(
 
     // Receive the response from the server
     info!("receiving response...");
-    let (num_bytes, _) = socket.recv_from(&mut buf).await?;
-    info!("received {} bytes", num_bytes);
+    let result = timeout(Duration::from_millis(500), socket.recv_from(&mut buf)).await;
 
-    // Compare the received payload with the transmitted payload
-    let received_payload = &buf[..num_bytes];
-    if received_payload == payload {
-        info!("payloads match");
-    } else {
-        info!("payloads do not match");
+    match result {
+        Ok(Ok((num_bytes, _))) => {
+            info!("received {} bytes", num_bytes);
+            let received_payload = &buf[..num_bytes];
+            if received_payload == payload {
+                info!("payloads match");
+            } else {
+                info!("payloads do not match");
+            }
+        }
+        Ok(Err(e)) => {
+            error!("error receiving data: {}", e);
+        }
+        Err(_) => {
+            error!("timeout: no response received within 0.5 seconds");
+        }
     }
 
     Ok(())
