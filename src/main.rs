@@ -30,9 +30,10 @@ async fn main() {
     )
     .get_matches();
 
+    let mut remote_url = "";
     let is_client_mode = match_result.contains_id("remote_url");
     if is_client_mode {
-        let remote_url = match_result.get_one::<String>("remote_url").unwrap();
+        remote_url = match_result.get_one::<String>("remote_url").unwrap();
         println!("remote_url is {} -- client mode enabled", remote_url);
     }
     else {
@@ -56,19 +57,17 @@ async fn main() {
     info!("application start");
 
     if is_client_mode {
-        let client_task: tokio::task::JoinHandle<()> = tokio::spawn( client_thread() );
-        signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
-        client_task.abort();
+        // let client_task: tokio::task::JoinHandle<()> = tokio::spawn( client_thread( remote_url.to_string(), *remote_port, *local_port ) );
+        // signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
+        // client_task.abort();
+        client_task( remote_url.to_string(), *remote_port, *local_port ).await;
     }
     else {
-        let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port) );
+        let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port ) );
         signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
         server_task.abort();
+        sleep(Duration::from_millis(1000)).await;
     }
-
-
-
-    sleep(Duration::from_millis(2500)).await;
 
     info!("application end");
     
@@ -108,8 +107,52 @@ async fn server_thread(local_port: u16) {
     info!("server stop")
 }
 
-async fn client_thread() {
+async fn client_task(remote_url: String, remote_port: u16, local_port: u16) {
     info!("client start");
 
+    // Specify the local and remote addresses
+    let local_addr = format!( "0.0.0.0:{}", local_port );
+    let remote_addr = format!( "{}:{}", remote_url, remote_port );
+
+    // Specify the payload for the UDP packet
+    let payload = b"1234567890";
+
+    // Call the function to send and receive the UDP echo packet
+    if let Err(e) = send_receive_udp_echo_packet(local_addr, remote_addr, payload).await {
+        error!("Error: {}", e);
+    }
+
     info!("client stop")
+}
+
+
+async fn send_receive_udp_echo_packet(
+    local_addr: String,
+    remote_addr: String,
+    payload: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create a UDP socket bound to the specified local address
+    let socket = UdpSocket::bind(local_addr).await?;
+
+    // Send the UDP packet with the specified payload to the remote address
+    info!("sending {} bytes to {}", payload.len(), remote_addr);
+    socket.send_to(payload, &remote_addr).await?;
+
+    // Buffer to store the received data
+    let mut buf = vec![0; payload.len()];
+
+    // Receive the response from the server
+    info!("receiving response...");
+    let (num_bytes, _) = socket.recv_from(&mut buf).await?;
+    info!("received {} bytes", num_bytes);
+
+    // Compare the received payload with the transmitted payload
+    let received_payload = &buf[..num_bytes];
+    if received_payload == payload {
+        info!("payloads match");
+    } else {
+        info!("payloads do not match");
+    }
+
+    Ok(())
 }
