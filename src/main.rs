@@ -34,6 +34,13 @@ async fn main() {
             .long("data_payload")
             .default_value("Hello World!")
     )
+    .arg(
+        Arg::new("count")
+            .short('c')
+            .long("count")
+            .value_parser(clap::value_parser!(u32))
+            .default_value("5")
+    )
     .get_matches();
 
     let mut remote_url = "";
@@ -55,6 +62,8 @@ async fn main() {
 
     let data_payload = match_result.get_one::<String>("data_payload").unwrap();
 
+    let count = match_result.get_one::<u32>("count").unwrap();
+
     // Initialize the logger (env_logger)
     let mut builder = Builder::new();
     builder.format_timestamp_micros();
@@ -65,7 +74,7 @@ async fn main() {
     info!("application start");
 
     if is_client_mode {
-        client_task( remote_url.to_string(), *remote_port, *local_port, data_payload.to_string() ).await;
+        client_task( remote_url.to_string(), *remote_port, *local_port, *count, data_payload.to_string() ).await;
     }
     else {
         let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port ) );
@@ -112,7 +121,7 @@ async fn server_thread(local_port: u16) {
     info!("server stop")
 }
 
-async fn client_task(remote_url: String, remote_port: u16, local_port: u16, data_payload: String) {
+async fn client_task(remote_url: String, remote_port: u16, local_port: u16, count: u32, data_payload: String) {
     info!("client start");
 
     // Specify the local and remote addresses
@@ -123,8 +132,11 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, data
     let payload = data_payload.as_bytes();
 
     // Call the function to send and receive the UDP echo packet
-    if let Err(e) = send_receive_udp_echo_packet(local_addr, remote_addr, payload).await {
-        error!("Error: {}", e);
+    for _i in 0..count {
+        if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload).await {
+            error!("Error: {}", e);
+        }
+        sleep(Duration::from_millis(1000)).await;
     }
 
     info!("client stop")
