@@ -1,7 +1,8 @@
 use clap::{command, Arg};
 use log::{info, error, LevelFilter};
 use env_logger::Builder;
-use tokio::net::UdpSocket;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, UdpSocket};
 use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
@@ -48,6 +49,13 @@ async fn main() {
             .value_parser(clap::value_parser!(f32))
             .default_value("1.0")
     )
+    .arg(
+        Arg::new("protocol")
+            .short('p')
+            .long("protocol")
+            .value_parser( ["udp", "tcp"] )
+            .default_value("udp")
+    )
     .get_matches();
 
     // Initialize the logger (env_logger)
@@ -80,6 +88,9 @@ async fn main() {
     let count = match_result.get_one::<u32>("count").unwrap();
     info!("count is {}", count);
 
+    let protocol = match_result.get_one::<String>("protocol").unwrap();
+    info!("protocol is {}", protocol);
+
     let mut timeout_in_seconds = match_result.get_one::<f32>("timeout_in_seconds").unwrap();
     if timeout_in_seconds < &0.2 {
         timeout_in_seconds = &0.2;
@@ -92,9 +103,16 @@ async fn main() {
         client_task( remote_url.to_string(), *remote_port, *local_port, *count, *timeout_in_seconds, data_payload.to_string() ).await;
     }
     else {
-        let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread( *local_port ) );
-        signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
-        server_task.abort();
+        if protocol == "tcp" {
+            let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread_tcp( *local_port ) );
+            signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
+            server_task.abort();
+        }
+        else {
+            let server_task: tokio::task::JoinHandle<()> = tokio::spawn( server_thread_udp( *local_port ) );
+            signal::ctrl_c().await.expect("Failed to install CTRL+C signal handler");
+            server_task.abort();
+        }
         sleep(Duration::from_millis(1000)).await;
     }
 
@@ -102,7 +120,46 @@ async fn main() {
     
 }
 
-async fn server_thread(local_port: u16) {
+async fn server_thread_tcp(local_port: u16) {
+    info!("server start");
+
+    let addr = format!( "0.0.0.0:{}", local_port );
+    let listener = TcpListener::bind(&addr).await.expect( "failed to create listener" );
+    info!("server listening on {}", addr);
+
+    let mut count = 0;
+
+    loop {
+        let ( mut socket, _) = listener.accept().await.expect( "failed to accept connection");
+        info!("server connected to {}", socket.peer_addr().unwrap() );
+
+        tokio::spawn( async move {
+
+            loop {
+                let mut buf: [u8; 65536] = [0u8; 65536];
+                match socket.read(&mut buf).await {
+                    Ok(n) if n == 0 => {
+                        info!("connection closed by client {}", socket.peer_addr().unwrap());
+                        break;
+                    }
+                    Ok(n) => {
+                        count += 1;
+                        info!("[{}] received {} bytes from {}", count, n, socket.peer_addr().unwrap() );
+
+                        if let Err(e) = socket.write_all(&buf[..n]).await {
+                            error!("error writing to socket: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("error while receiving data: {}", e);
+                    }
+                }
+            }
+        } );
+    }
+}
+
+async fn server_thread_udp(local_port: u16) {
     info!("server start");
 
     let addr = format!( "0.0.0.0:{}", local_port );
@@ -111,8 +168,6 @@ async fn server_thread(local_port: u16) {
 
     let mut buf: [u8; 65536] = [0u8; 65536];
     let mut count = 0;
-
-    
 
     loop {
         tokio::select! {
