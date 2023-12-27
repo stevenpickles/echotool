@@ -2,7 +2,7 @@ use clap::{command, Arg};
 use log::{info, error, LevelFilter};
 use env_logger::Builder;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, UdpSocket};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
@@ -100,7 +100,12 @@ async fn main() {
     info!("application start");
 
     if is_client_mode {
-        client_task( remote_url.to_string(), *remote_port, *local_port, *count, *timeout_in_seconds, data_payload.to_string() ).await;
+        if protocol == "tcp" {
+            client_task_tcp( remote_url.to_string(), *remote_port, *local_port, *count, *timeout_in_seconds, data_payload.to_string() ).await;
+        }
+        else {
+            client_task_udp( remote_url.to_string(), *remote_port, *local_port, *count, *timeout_in_seconds, data_payload.to_string() ).await;
+        }
     }
     else {
         if protocol == "tcp" {
@@ -191,7 +196,7 @@ async fn server_thread_udp(local_port: u16) {
     info!("server stop")
 }
 
-async fn client_task(remote_url: String, remote_port: u16, local_port: u16, count: u32, timeout_in_seconds: f32, data_payload: String) {
+async fn client_task_udp(remote_url: String, remote_port: u16, local_port: u16, count: u32, timeout_in_seconds: f32, data_payload: String) {
     info!("client start");
 
     // Specify the local and remote addresses
@@ -205,7 +210,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
     if count == 0 {
         loop {
             if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload, timeout_in_seconds).await {
-                error!("Error: {}", e);
+                error!("error: {}", e);
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -213,7 +218,7 @@ async fn client_task(remote_url: String, remote_port: u16, local_port: u16, coun
     else {
         for _i in 0..count {
             if let Err(e) = send_receive_udp_echo_packet(local_addr.clone(), remote_addr.clone(), payload, timeout_in_seconds).await {
-                error!("Error: {}", e);
+                error!("error: {}", e);
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -263,4 +268,78 @@ async fn send_receive_udp_echo_packet(
     }
 
     Ok(())
+}
+
+
+async fn client_task_tcp(
+    remote_url: String,
+    remote_port: u16,
+    local_port: u16,
+    count: u32,
+    timeout_in_seconds: f32,
+    data_payload: String ) {
+    info!("tcp client start");
+
+    // Specify the local and remote addresses
+    let local_addr = format!( "0.0.0.0:{}", local_port );
+    let remote_addr = format!( "{}:{}", remote_url, remote_port );
+
+    // Specify the payload for the packet
+    let payload = data_payload.as_bytes();
+
+    let mut stream = match TcpStream::connect(remote_addr).await {
+        Ok(stream) => stream,
+        Err(e) => {
+            error!("failed to connect: {}", e);
+            return;
+        }
+    };
+
+    let mut continue_forever = false;
+    if count == 0 {
+        continue_forever = true;
+    }
+
+    let mut remaining = count;
+    while ( remaining > 0 ) || continue_forever {
+        info!("sending {} bytes to {}", payload.len(), stream.peer_addr().unwrap() );
+        let result = stream.write_all(payload).await;
+        match result {
+            Ok(_) => {
+                info!("sent {} bytes to {}", payload.len(), stream.peer_addr().unwrap() );
+            }
+            Err(e) => {
+                error!("error sending data: {}", e);
+                return;
+            }
+        }
+
+        let mut buffer = vec![0; payload.len()];
+        info!("receiving response...");
+        let result = stream.read_exact(&mut buffer).await;
+        match result {
+            Ok(_) => {
+                info!("received {} bytes", buffer.len());
+
+                if buffer == payload {
+                    info!("payloads match");
+                }
+                else {
+                    info!("payloads do not match");
+                }
+            }
+            Err(e) => {
+                error!("failed to read from socket: {}", e);
+                return;
+            }
+        }
+
+        if remaining > 0 {
+            remaining -= 1;
+        }
+
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    info!("tcp client stop")
 }
