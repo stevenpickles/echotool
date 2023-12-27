@@ -170,7 +170,7 @@ async fn server_thread_tcp(local_port: u16) {
     let listener = TcpListener::bind(&addr)
         .await
         .expect("failed to create listener");
-    info!("server listening on {}", addr);
+    info!("server listening on {addr}");
 
     let mut count = 0;
 
@@ -179,34 +179,34 @@ async fn server_thread_tcp(local_port: u16) {
             .accept()
             .await
             .expect("failed to accept connection");
-        info!("server connected to {}", socket.peer_addr().unwrap());
+
+        let peer_addr = match socket.peer_addr() {
+            Ok(addr) => addr,
+            Err(e) => {
+                error!("failed to get peer address: {e}");
+                return;
+            }
+        };
+        info!("server connected to {peer_addr}");
 
         tokio::spawn(async move {
             loop {
                 let mut buf: [u8; 65536] = [0u8; 65536];
                 match socket.read(&mut buf).await {
                     Ok(0) => {
-                        info!(
-                            "connection closed by client {}",
-                            socket.peer_addr().unwrap()
-                        );
+                        info!("connection closed by client {peer_addr}");
                         break;
                     }
                     Ok(n) => {
                         count += 1;
-                        info!(
-                            "[{}] received {} bytes from {}",
-                            count,
-                            n,
-                            socket.peer_addr().unwrap()
-                        );
+                        info!("[{count}] received {n} bytes from {peer_addr}");
 
                         if let Err(e) = socket.write_all(&buf[..n]).await {
-                            error!("error writing to socket: {}", e);
+                            error!("error writing to socket: {e}");
                         }
                     }
                     Err(e) => {
-                        error!("error while receiving data: {}", e);
+                        error!("error while receiving data: {e}");
                     }
                 }
             }
@@ -382,6 +382,15 @@ async fn client_task_tcp(
         }
     };
 
+    let peer_addr = match stream.peer_addr() {
+        Ok(addr) => addr,
+        Err(e) => {
+            error!("failed to get peer address: {e}");
+            return;
+        }
+    };
+    info!("connected to peer {peer_addr}");
+
     let mut continue_forever = false;
     if count == 0 {
         continue_forever = true;
@@ -389,11 +398,7 @@ async fn client_task_tcp(
 
     let mut remaining = count;
     while (remaining > 0) || continue_forever {
-        info!(
-            "sending {} bytes to {}",
-            payload.len(),
-            stream.peer_addr().unwrap()
-        );
+        info!("sending {} bytes to {peer_addr}", payload.len());
 
         let result = timeout(
             Duration::from_secs_f64(timeout_in_seconds),
@@ -402,21 +407,14 @@ async fn client_task_tcp(
         .await;
         match result {
             Ok(Ok(())) => {
-                info!(
-                    "sent {} bytes to {}",
-                    payload.len(),
-                    stream.peer_addr().unwrap()
-                );
+                info!("sent {} bytes to {peer_addr}", payload.len());
             }
             Ok(Err(e)) => {
-                error!("error sending data: {}", e);
+                error!("error sending data: {e}");
                 return;
             }
             Err(_) => {
-                error!(
-                    "timeout: no response received within {} seconds",
-                    timeout_in_seconds
-                );
+                error!("timeout: no response received within {timeout_in_seconds} seconds");
                 return;
             }
         }
@@ -439,14 +437,11 @@ async fn client_task_tcp(
                 }
             }
             Ok(Err(e)) => {
-                error!("failed to read from socket: {}", e);
+                error!("failed to read from socket: {e}");
                 return;
             }
             Err(_) => {
-                error!(
-                    "timeout: no response received within {} seconds",
-                    timeout_in_seconds
-                );
+                error!("timeout: no response received within {timeout_in_seconds} seconds");
                 return;
             }
         }
