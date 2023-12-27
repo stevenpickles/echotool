@@ -391,10 +391,7 @@ async fn client_task_tcp(
     };
     info!("connected to peer {peer_addr}");
 
-    let mut continue_forever = false;
-    if count == 0 {
-        continue_forever = true;
-    }
+    let continue_forever = count == 0;
 
     let mut remaining = count;
     while (remaining > 0) || continue_forever {
