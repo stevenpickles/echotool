@@ -83,7 +83,7 @@ async fn main() {
     // Delegate to appropriate functions based on protocol and mode
     if is_client_mode {
         if protocol == "tcp" {
-            tcp::client_task_tcp(
+            tcp::client_task(
                 remote_url.to_string(),
                 *remote_port,
                 *local_port,
@@ -93,7 +93,7 @@ async fn main() {
             )
             .await;
         } else {
-            udp::client_task_udp(
+            udp::client_task(
                 remote_url.to_string(),
                 *remote_port,
                 *local_port,
@@ -104,7 +104,7 @@ async fn main() {
             .await;
         }
     } else if protocol == "tcp" {
-        let server_task = tokio::spawn(tcp::server_thread_tcp(*local_port));
+        let server_task = tokio::spawn(tcp::server_task(*local_port));
         let result = signal::ctrl_c().await;
         match result {
             Ok(()) => {
@@ -117,7 +117,7 @@ async fn main() {
         }
         server_task.abort();
     } else {
-        let server_task = tokio::spawn(udp::server_thread_udp(*local_port));
+        let server_task = tokio::spawn(udp::server_task(*local_port));
         let result = signal::ctrl_c().await;
         match result {
             Ok(()) => {

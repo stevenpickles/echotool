@@ -2,7 +2,7 @@ use log::{error, info};
 use tokio::net::UdpSocket;
 use tokio::time::{sleep, timeout, Duration};
 
-pub async fn server_thread_udp(local_port: u16) {
+pub async fn server_task(local_port: u16) {
     info!("server start");
 
     let addr = format!("0.0.0.0:{local_port}");
@@ -52,7 +52,7 @@ pub async fn server_thread_udp(local_port: u16) {
     info!("server stop");
 }
 
-pub async fn client_task_udp(
+pub async fn client_task(
     remote_url: String,
     remote_port: u16,
     local_port: u16,
@@ -72,7 +72,7 @@ pub async fn client_task_udp(
     // Call the function to send and receive the UDP echo packet
     if count == 0 {
         loop {
-            if let Err(e) = send_receive_udp_echo_packet(
+            if let Err(e) = send_receive_echo_packet(
                 local_addr.clone(),
                 remote_addr.clone(),
                 payload,
@@ -86,7 +86,7 @@ pub async fn client_task_udp(
         }
     } else {
         for _i in 0..count {
-            if let Err(e) = send_receive_udp_echo_packet(
+            if let Err(e) = send_receive_echo_packet(
                 local_addr.clone(),
                 remote_addr.clone(),
                 payload,
@@ -103,7 +103,7 @@ pub async fn client_task_udp(
     info!("client stop");
 }
 
-pub async fn send_receive_udp_echo_packet(
+pub async fn send_receive_echo_packet(
     local_addr: String,
     remote_addr: String,
     payload: &[u8],

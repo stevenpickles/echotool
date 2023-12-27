@@ -4,7 +4,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use tokio::time::{sleep, timeout, Duration};
 
-pub async fn server_thread_tcp(local_port: u16) {
+pub async fn server_task(local_port: u16) {
     info!("server start");
 
     let addr = format!("0.0.0.0:{local_port}");
@@ -56,7 +56,7 @@ pub async fn server_thread_tcp(local_port: u16) {
     }
 }
 
-pub async fn client_task_tcp(
+pub async fn client_task(
     remote_url: String,
     remote_port: u16,
     local_port: u16,
