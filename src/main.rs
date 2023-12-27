@@ -308,22 +308,27 @@ async fn client_task_tcp(
     let mut remaining = count;
     while ( remaining > 0 ) || continue_forever {
         info!("sending {} bytes to {}", payload.len(), stream.peer_addr().unwrap() );
-        let result = stream.write_all(payload).await;
+
+        let result = timeout(Duration::from_secs_f32(timeout_in_seconds), stream.write_all(payload) ).await;
         match result {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 info!("sent {} bytes to {}", payload.len(), stream.peer_addr().unwrap() );
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("error sending data: {}", e);
+                return;
+            }
+            Err(_) => {
+                error!("timeout: no response received within {} seconds", timeout_in_seconds);
                 return;
             }
         }
 
         let mut buffer = vec![0; payload.len()];
-        info!("receiving response...");
-        let result = stream.read_exact(&mut buffer).await;
+        info!("waiting for response...");
+        let result = timeout(Duration::from_secs_f32(timeout_in_seconds), stream.read_exact(&mut buffer) ).await;
         match result {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 info!("received {} bytes", buffer.len());
 
                 if buffer == payload {
@@ -333,8 +338,12 @@ async fn client_task_tcp(
                     info!("payloads do not match");
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("failed to read from socket: {}", e);
+                return;
+            }
+            Err(_) => {
+                error!("timeout: no response received within {} seconds", timeout_in_seconds);
                 return;
             }
         }
