@@ -1,61 +1,22 @@
-use clap::{command, Arg};
 use env_logger::Builder;
 use log::{error, info, LevelFilter};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::signal;
-use tokio::time::{sleep, timeout, Duration};
+
+mod clargs;
+mod tcp;
+mod udp;
 
 #[tokio::main]
 async fn main() {
-    let match_result = command!()
-        .arg(
-            Arg::new("remote_url")
-                .help("the remote URL to connect to (client mode only)")
-                .display_order(1),
-        )
-        .arg(
-            Arg::new("remote_port")
-                .short('r')
-                .long("remote_port")
-                .value_parser(clap::value_parser!(u16).range(1..))
-                .default_value("7"),
-        )
-        .arg(
-            Arg::new("local_port")
-                .short('l')
-                .long("local_port")
-                .value_parser(clap::value_parser!(u16).range(1..))
-                .default_value("7"),
-        )
-        .arg(
-            Arg::new("data_payload")
-                .short('d')
-                .long("data_payload")
-                .default_value("Hello World!"),
-        )
-        .arg(
-            Arg::new("count")
-                .short('c')
-                .long("count")
-                .value_parser(clap::value_parser!(u32))
-                .default_value("5"),
-        )
-        .arg(
-            Arg::new("timeout_in_seconds")
-                .short('t')
-                .long("timeout")
-                .value_parser(clap::value_parser!(f64))
-                .default_value("1.0"),
-        )
-        .arg(
-            Arg::new("protocol")
-                .short('p')
-                .long("protocol")
-                .value_parser(["udp", "tcp"])
-                .default_value("udp"),
-        )
-        .get_matches();
+    // Initialize the logger (env_logger)
+    let mut builder = Builder::new();
+    builder.format_timestamp_micros();
+    builder.filter_level(LevelFilter::Info);
+    builder.target(env_logger::Target::Stdout);
+    builder.init();
+
+    // Parse command-line arguments
+    let match_result = clargs::parse_command_line_args();
 
     // Initialize the logger (env_logger)
     let mut builder = Builder::new();
@@ -119,9 +80,10 @@ async fn main() {
 
     info!("application start");
 
+    // Delegate to appropriate functions based on protocol and mode
     if is_client_mode {
         if protocol == "tcp" {
-            client_task_tcp(
+            tcp::client_task_tcp(
                 remote_url.to_string(),
                 *remote_port,
                 *local_port,
@@ -131,7 +93,7 @@ async fn main() {
             )
             .await;
         } else {
-            client_task_udp(
+            udp::client_task_udp(
                 remote_url.to_string(),
                 *remote_port,
                 *local_port,
@@ -143,8 +105,7 @@ async fn main() {
         }
     } else {
         if protocol == "tcp" {
-            let server_task: tokio::task::JoinHandle<()> =
-                tokio::spawn(server_thread_tcp(*local_port));
+            let server_task = tokio::spawn(tcp::server_thread_tcp(*local_port));
             let result = signal::ctrl_c().await;
             match result {
                 Ok(()) => {
@@ -157,329 +118,20 @@ async fn main() {
             }
             server_task.abort();
         } else {
-            let server_task: tokio::task::JoinHandle<()> =
-                tokio::spawn(server_thread_udp(*local_port));
-                let result = signal::ctrl_c().await;
-                match result {
-                    Ok(()) => {
-                        info!("detected ctrl+c, shutting down...");
-                    }
-                    Err(e) => {
-                        error!("failed to install CTRL+C signal handler: {e}");
-                        return;
-                    }
+            let server_task = tokio::spawn(udp::server_thread_udp(*local_port));
+            let result = signal::ctrl_c().await;
+            match result {
+                Ok(()) => {
+                    info!("detected ctrl+c, shutting down...");
                 }
+                Err(e) => {
+                    error!("failed to install CTRL+C signal handler: {e}");
+                    return;
+                }
+            }
             server_task.abort();
         }
-        sleep(Duration::from_millis(1000)).await;
     }
 
     info!("application end");
-}
-
-async fn server_thread_tcp(local_port: u16) {
-    info!("server start");
-
-    let addr = format!("0.0.0.0:{local_port}");
-    let result = TcpListener::bind(&addr).await;
-    let listener = match result {
-        Ok(listener) => listener,
-        Err(e) => {
-            error!("failed to bind listener: {e}");
-            return;
-        }
-    };
-    info!("server listening on {addr}");
-
-    let mut count = 0;
-
-    loop {
-        let result = listener.accept().await;
-        let (mut socket, peer_addr) = match result {
-            Ok((socket, peer_addr)) => (socket, peer_addr),
-            Err(e) => {
-                error!("failed to accept connection: {e}");
-                return;
-            }
-        };
-        info!("server connected to {peer_addr}");
-
-        tokio::spawn(async move {
-            loop {
-                let mut buf: [u8; 65536] = [0u8; 65536];
-                match socket.read(&mut buf).await {
-                    Ok(0) => {
-                        info!("connection closed by client {peer_addr}");
-                        break;
-                    }
-                    Ok(n) => {
-                        count += 1;
-                        info!("[{count}] received {n} bytes from {peer_addr}");
-
-                        if let Err(e) = socket.write_all(&buf[..n]).await {
-                            error!("error writing to socket: {e}");
-                        }
-                    }
-                    Err(e) => {
-                        error!("error while receiving data: {e}");
-                    }
-                }
-            }
-        });
-    }
-}
-
-async fn server_thread_udp(local_port: u16) {
-    info!("server start");
-
-    let addr = format!("0.0.0.0:{local_port}");
-    let result = UdpSocket::bind(&addr).await;
-    let socket = match result {
-        Ok(socket) => socket,
-        Err(e) => {
-            error!("failed to bind socket: {e}");
-            return;
-        }
-    };
-    info!("server listening on {addr}");
-
-    let mut buf: [u8; 65536] = [0u8; 65536];
-    let mut count = 0;
-
-    loop {
-        tokio::select! {
-            recv_result = socket.recv_from(&mut buf) => match recv_result {
-                Ok((size, src)) => {
-                    count += 1;
-                    info!("[{count}] received {size} bytes from {src}");
-
-                    let result = socket.send_to(&buf[0..size], &src).await;
-                    match result {
-                        Ok(size) => {
-                            info!("sent {size} bytes to {src}");
-                        }
-                        Err(e) => {
-                            error!("error sending data: {e}");
-                            return;
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("error while receiving data: {e}");
-                    return;
-                }
-            },
-            _ = tokio::signal::ctrl_c() => {
-                info!("detected ctrl+c, shutting down...");
-                break;
-            }
-        }
-    }
-
-    info!("server stop");
-}
-
-async fn client_task_udp(
-    remote_url: String,
-    remote_port: u16,
-    local_port: u16,
-    count: u32,
-    timeout_in_seconds: f64,
-    data_payload: String,
-) {
-    info!("client start");
-
-    // Specify the local and remote addresses
-    let local_addr = format!("0.0.0.0:{local_port}");
-    let remote_addr = format!("{remote_url}:{remote_port}");
-
-    // Specify the payload for the UDP packet
-    let payload = data_payload.as_bytes();
-
-    // Call the function to send and receive the UDP echo packet
-    if count == 0 {
-        loop {
-            if let Err(e) = send_receive_udp_echo_packet(
-                local_addr.clone(),
-                remote_addr.clone(),
-                payload,
-                timeout_in_seconds,
-            )
-            .await
-            {
-                error!("error: {}", e);
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
-    } else {
-        for _i in 0..count {
-            if let Err(e) = send_receive_udp_echo_packet(
-                local_addr.clone(),
-                remote_addr.clone(),
-                payload,
-                timeout_in_seconds,
-            )
-            .await
-            {
-                error!("error: {}", e);
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
-    }
-
-    info!("client stop");
-}
-
-async fn send_receive_udp_echo_packet(
-    local_addr: String,
-    remote_addr: String,
-    payload: &[u8],
-    timeout_in_seconds: f64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Create a UDP socket bound to the specified local address
-    let socket = UdpSocket::bind(local_addr).await?;
-
-    // Send the UDP packet with the specified payload to the remote address
-    info!("sending {} bytes to {}", payload.len(), remote_addr);
-    socket.send_to(payload, &remote_addr).await?;
-
-    // Buffer to store the received data
-    let mut buf = vec![0; payload.len()];
-
-    // Receive the response from the server
-    info!("receiving response...");
-    let result = timeout(
-        Duration::from_secs_f64(timeout_in_seconds),
-        socket.recv_from(&mut buf),
-    )
-    .await;
-
-    match result {
-        Ok(Ok((num_bytes, _))) => {
-            info!("received {} bytes", num_bytes);
-            let received_payload = &buf[..num_bytes];
-            if received_payload == payload {
-                info!("payloads match");
-            } else {
-                info!("payloads do not match");
-            }
-        }
-        Ok(Err(e)) => {
-            error!("error receiving data: {}", e);
-        }
-        Err(_) => {
-            error!(
-                "timeout: no response received within {} seconds",
-                timeout_in_seconds
-            );
-        }
-    }
-
-    Ok(())
-}
-
-async fn client_task_tcp(
-    remote_url: String,
-    remote_port: u16,
-    local_port: u16,
-    count: u32,
-    timeout_in_seconds: f64,
-    data_payload: String,
-) {
-    info!("tcp client start");
-
-    // Specify the local and remote addresses
-    let _local_addr = format!("0.0.0.0:{local_port}");
-    let remote_addr = format!("{remote_url}:{remote_port}");
-
-    // Specify the payload for the packet
-    let payload = data_payload.as_bytes();
-
-    let result = timeout(
-        Duration::from_secs_f64(timeout_in_seconds),
-        TcpStream::connect(remote_addr),
-    )
-    .await;
-    let mut stream = match result {
-        Ok(Ok(stream)) => stream,
-        Ok(Err(e)) => {
-            error!("failed to connect: {}", e);
-            return;
-        }
-        Err(_) => {
-            error!(
-                "timeout: no response received within {} seconds",
-                timeout_in_seconds
-            );
-            return;
-        }
-    };
-
-    let peer_addr = match stream.peer_addr() {
-        Ok(addr) => addr,
-        Err(e) => {
-            error!("failed to get peer address: {e}");
-            return;
-        }
-    };
-    info!("connected to peer {peer_addr}");
-
-    let continue_forever = count == 0;
-
-    let mut remaining = count;
-    while (remaining > 0) || continue_forever {
-        info!("sending {} bytes to {peer_addr}", payload.len());
-
-        let result = timeout(
-            Duration::from_secs_f64(timeout_in_seconds),
-            stream.write_all(payload),
-        )
-        .await;
-        match result {
-            Ok(Ok(())) => {
-                info!("sent {} bytes to {peer_addr}", payload.len());
-            }
-            Ok(Err(e)) => {
-                error!("error sending data: {e}");
-                return;
-            }
-            Err(_) => {
-                error!("timeout: no response received within {timeout_in_seconds} seconds");
-                return;
-            }
-        }
-
-        let mut buffer = vec![0; payload.len()];
-        info!("waiting for response...");
-        let result = timeout(
-            Duration::from_secs_f64(timeout_in_seconds),
-            stream.read_exact(&mut buffer),
-        )
-        .await;
-        match result {
-            Ok(Ok(_)) => {
-                info!("received {} bytes", buffer.len());
-
-                if buffer == payload {
-                    info!("payloads match");
-                } else {
-                    info!("payloads do not match");
-                }
-            }
-            Ok(Err(e)) => {
-                error!("failed to read from socket: {e}");
-                return;
-            }
-            Err(_) => {
-                error!("timeout: no response received within {timeout_in_seconds} seconds");
-                return;
-            }
-        }
-
-        remaining = remaining.saturating_sub(1);
-
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    info!("tcp client stop");
 }
