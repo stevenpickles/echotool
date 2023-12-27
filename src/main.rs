@@ -103,34 +103,32 @@ async fn main() {
             )
             .await;
         }
-    } else {
-        if protocol == "tcp" {
-            let server_task = tokio::spawn(tcp::server_thread_tcp(*local_port));
-            let result = signal::ctrl_c().await;
-            match result {
-                Ok(()) => {
-                    info!("detected ctrl+c, shutting down...");
-                }
-                Err(e) => {
-                    error!("failed to install CTRL+C signal handler: {e}");
-                    return;
-                }
+    } else if protocol == "tcp" {
+        let server_task = tokio::spawn(tcp::server_thread_tcp(*local_port));
+        let result = signal::ctrl_c().await;
+        match result {
+            Ok(()) => {
+                info!("detected ctrl+c, shutting down...");
             }
-            server_task.abort();
-        } else {
-            let server_task = tokio::spawn(udp::server_thread_udp(*local_port));
-            let result = signal::ctrl_c().await;
-            match result {
-                Ok(()) => {
-                    info!("detected ctrl+c, shutting down...");
-                }
-                Err(e) => {
-                    error!("failed to install CTRL+C signal handler: {e}");
-                    return;
-                }
+            Err(e) => {
+                error!("failed to install CTRL+C signal handler: {e}");
+                return;
             }
-            server_task.abort();
         }
+        server_task.abort();
+    } else {
+        let server_task = tokio::spawn(udp::server_thread_udp(*local_port));
+        let result = signal::ctrl_c().await;
+        match result {
+            Ok(()) => {
+                info!("detected ctrl+c, shutting down...");
+            }
+            Err(e) => {
+                error!("failed to install CTRL+C signal handler: {e}");
+                return;
+            }
+        }
+        server_task.abort();
     }
 
     info!("application end");
