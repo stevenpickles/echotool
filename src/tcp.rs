@@ -45,10 +45,12 @@ pub async fn server_task(local_port: u16) {
 
                         if let Err(e) = socket.write_all(&buf[..n]).await {
                             error!("error writing to socket: {e}");
+                            return;
                         }
                     }
                     Err(e) => {
                         error!("error while receiving data: {e}");
+                        return
                     }
                 }
             }
