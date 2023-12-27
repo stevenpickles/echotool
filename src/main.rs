@@ -8,20 +8,15 @@ mod udp;
 
 #[tokio::main]
 async fn main() {
-    // Initialize the logger (env_logger)
-    let mut builder = Builder::new();
-    builder.format_timestamp_micros();
-    builder.filter_level(LevelFilter::Info);
-    builder.target(env_logger::Target::Stdout);
-    builder.init();
+    init_logger();
 
     // Parse command-line arguments
-    let match_result = clargs::parse_command_line_args();
+    let clargs = clargs::parse_command_line_args();
 
     let mut remote_url = "";
-    let is_client_mode = match_result.contains_id("remote_url");
+    let is_client_mode = clargs.contains_id("remote_url");
     if is_client_mode {
-        let result = match_result.get_one::<String>("remote_url");
+        let result = clargs.get_one::<String>("remote_url");
         result.map_or_else(
             || {
                 info!("remote_url is empty -- server mode enabled");
@@ -35,37 +30,37 @@ async fn main() {
         info!("remote_url is empty -- server mode enabled");
     }
 
-    let Some(remote_port) = match_result.get_one::<u16>("remote_port") else {
+    let Some(remote_port) = clargs.get_one::<u16>("remote_port") else {
         error!("remote_port is invalid");
         return;
     };
     info!("remote_port is {remote_port}");
 
-    let Some(local_port) = match_result.get_one::<u16>("local_port") else {
+    let Some(local_port) = clargs.get_one::<u16>("local_port") else {
         error!("local_port is invalid");
         return;
     };
     info!("local_port is {local_port}");
 
-    let Some(data_payload) = match_result.get_one::<String>("data_payload") else {
+    let Some(data_payload) = clargs.get_one::<String>("data_payload") else {
         error!("data_payload is invalid");
         return;
     };
     info!("data_payload is {data_payload}");
 
-    let Some(count) = match_result.get_one::<u32>("count") else {
+    let Some(count) = clargs.get_one::<u32>("count") else {
         error!("count is invalid");
         return;
     };
     info!("count is {count}");
 
-    let Some(protocol) = match_result.get_one::<String>("protocol") else {
+    let Some(protocol) = clargs.get_one::<String>("protocol") else {
         error!("protocol is invalid");
         return;
     };
     info!("protocol is {protocol}");
 
-    let Some(timeout_in_seconds) = match_result.get_one::<f64>("timeout_in_seconds") else {
+    let Some(timeout_in_seconds) = clargs.get_one::<f64>("timeout_in_seconds") else {
         error!("timeout_in_seconds is invalid");
         return;
     };
@@ -104,7 +99,7 @@ async fn main() {
                 info!("detected ctrl+c, shutting down...");
             }
             Err(e) => {
-                error!("failed to install CTRL+C signal handler: {e}");
+                error!("failed to install ctrl+c signal handler: {e}");
                 return;
             }
         }
@@ -117,7 +112,7 @@ async fn main() {
                 info!("detected ctrl+c, shutting down...");
             }
             Err(e) => {
-                error!("failed to install CTRL+C signal handler: {e}");
+                error!("failed to install ctrl+c signal handler: {e}");
                 return;
             }
         }
@@ -125,4 +120,14 @@ async fn main() {
     }
 
     info!("application end");
+}
+
+
+fn init_logger() {
+    // Initialize the logger (env_logger)
+    let mut builder = Builder::new();
+    builder.format_timestamp_micros();
+    builder.filter_level(LevelFilter::Info);
+    builder.target(env_logger::Target::Stdout);
+    builder.init();
 }
