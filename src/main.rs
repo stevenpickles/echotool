@@ -18,13 +18,6 @@ async fn main() {
     // Parse command-line arguments
     let match_result = clargs::parse_command_line_args();
 
-    // Initialize the logger (env_logger)
-    let mut builder = Builder::new();
-    builder.format_timestamp_micros();
-    builder.filter_level(LevelFilter::Info);
-    builder.target(env_logger::Target::Stdout);
-    builder.init();
-
     let mut remote_url = "";
     let is_client_mode = match_result.contains_id("remote_url");
     if is_client_mode {
