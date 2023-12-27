@@ -45,7 +45,7 @@ async fn main() {
             Arg::new("timeout_in_seconds")
                 .short('t')
                 .long("timeout")
-                .value_parser(clap::value_parser!(f32))
+                .value_parser(clap::value_parser!(f64))
                 .default_value("1.0"),
         )
         .arg(
@@ -67,32 +67,55 @@ async fn main() {
     let mut remote_url = "";
     let is_client_mode = match_result.contains_id("remote_url");
     if is_client_mode {
-        remote_url = match_result.get_one::<String>("remote_url").unwrap();
-        info!("remote_url is {} -- client mode enabled", remote_url);
+        let result = match_result.get_one::<String>("remote_url");
+        result.map_or_else(
+            || {
+                info!("remote_url is empty -- server mode enabled");
+            },
+            |value| {
+                remote_url = value;
+                info!("remote_url is {remote_url} -- client mode enabled");
+            },
+        );
     } else {
         info!("remote_url is empty -- server mode enabled");
     }
 
-    let remote_port = match_result.get_one::<u16>("remote_port").unwrap();
-    info!("remote_port is {}", remote_port);
+    let Some(remote_port) = match_result.get_one::<u16>("remote_port") else {
+        error!("remote_port is invalid");
+        return;
+    };
+    info!("remote_port is {remote_port}");
 
-    let local_port = match_result.get_one::<u16>("local_port").unwrap();
-    info!("local_port is {}", local_port);
+    let Some(local_port) = match_result.get_one::<u16>("local_port") else {
+        error!("local_port is invalid");
+        return;
+    };
+    info!("local_port is {local_port}");
 
-    let data_payload = match_result.get_one::<String>("data_payload").unwrap();
-    info!("data_payload is {}", data_payload);
+    let Some(data_payload) = match_result.get_one::<String>("data_payload") else {
+        error!("data_payload is invalid");
+        return;
+    };
+    info!("data_payload is {data_payload}");
 
-    let count = match_result.get_one::<u32>("count").unwrap();
-    info!("count is {}", count);
+    let Some(count) = match_result.get_one::<u32>("count") else {
+        error!("count is invalid");
+        return;
+    };
+    info!("count is {count}");
 
-    let protocol = match_result.get_one::<String>("protocol").unwrap();
-    info!("protocol is {}", protocol);
+    let Some(protocol) = match_result.get_one::<String>("protocol") else {
+        error!("protocol is invalid");
+        return;
+    };
+    info!("protocol is {protocol}");
 
-    let mut timeout_in_seconds = match_result.get_one::<f32>("timeout_in_seconds").unwrap();
-    if timeout_in_seconds < &0.2 {
-        timeout_in_seconds = &0.2;
-    }
-    info!("timeout_in_seconds is {}", timeout_in_seconds);
+    let Some(timeout_in_seconds) = match_result.get_one::<f64>("timeout_in_seconds") else {
+        error!("timeout_in_seconds is invalid");
+        return;
+    };
+    info!("timeout_in_seconds is {timeout_in_seconds}");
 
     info!("application start");
 
@@ -100,20 +123,20 @@ async fn main() {
         if protocol == "tcp" {
             client_task_tcp(
                 remote_url.to_string(),
-                *remote_port,
-                *local_port,
-                *count,
-                *timeout_in_seconds,
+                remote_port.clone(),
+                local_port.clone(),
+                count.clone(),
+                timeout_in_seconds.clone(),
                 data_payload.to_string(),
             )
             .await;
         } else {
             client_task_udp(
                 remote_url.to_string(),
-                *remote_port,
-                *local_port,
-                *count,
-                *timeout_in_seconds,
+                remote_port.clone(),
+                local_port.clone(),
+                count.clone(),
+                timeout_in_seconds.clone(),
                 data_payload.to_string(),
             )
             .await;
@@ -143,7 +166,7 @@ async fn main() {
 async fn server_thread_tcp(local_port: u16) {
     info!("server start");
 
-    let addr = format!("0.0.0.0:{}", local_port);
+    let addr = format!("0.0.0.0:{local_port}");
     let listener = TcpListener::bind(&addr)
         .await
         .expect("failed to create listener");
@@ -162,7 +185,7 @@ async fn server_thread_tcp(local_port: u16) {
             loop {
                 let mut buf: [u8; 65536] = [0u8; 65536];
                 match socket.read(&mut buf).await {
-                    Ok(n) if n == 0 => {
+                    Ok(0) => {
                         info!(
                             "connection closed by client {}",
                             socket.peer_addr().unwrap()
@@ -194,7 +217,7 @@ async fn server_thread_tcp(local_port: u16) {
 async fn server_thread_udp(local_port: u16) {
     info!("server start");
 
-    let addr = format!("0.0.0.0:{}", local_port);
+    let addr = format!("0.0.0.0:{local_port}");
     let socket = UdpSocket::bind(&addr).await.expect("failed to bind socket");
     info!("server listening on {}", addr);
 
@@ -220,7 +243,7 @@ async fn server_thread_udp(local_port: u16) {
         }
     }
 
-    info!("server stop")
+    info!("server stop");
 }
 
 async fn client_task_udp(
@@ -228,14 +251,14 @@ async fn client_task_udp(
     remote_port: u16,
     local_port: u16,
     count: u32,
-    timeout_in_seconds: f32,
+    timeout_in_seconds: f64,
     data_payload: String,
 ) {
     info!("client start");
 
     // Specify the local and remote addresses
-    let local_addr = format!("0.0.0.0:{}", local_port);
-    let remote_addr = format!("{}:{}", remote_url, remote_port);
+    let local_addr = format!("0.0.0.0:{local_port}");
+    let remote_addr = format!("{remote_url}:{remote_port}");
 
     // Specify the payload for the UDP packet
     let payload = data_payload.as_bytes();
@@ -271,14 +294,14 @@ async fn client_task_udp(
         }
     }
 
-    info!("client stop")
+    info!("client stop");
 }
 
 async fn send_receive_udp_echo_packet(
     local_addr: String,
     remote_addr: String,
     payload: &[u8],
-    timeout_in_seconds: f32,
+    timeout_in_seconds: f64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create a UDP socket bound to the specified local address
     let socket = UdpSocket::bind(local_addr).await?;
@@ -293,7 +316,7 @@ async fn send_receive_udp_echo_packet(
     // Receive the response from the server
     info!("receiving response...");
     let result = timeout(
-        Duration::from_secs_f32(timeout_in_seconds),
+        Duration::from_secs_f64(timeout_in_seconds),
         socket.recv_from(&mut buf),
     )
     .await;
@@ -327,20 +350,20 @@ async fn client_task_tcp(
     remote_port: u16,
     local_port: u16,
     count: u32,
-    timeout_in_seconds: f32,
+    timeout_in_seconds: f64,
     data_payload: String,
 ) {
     info!("tcp client start");
 
     // Specify the local and remote addresses
-    let local_addr = format!("0.0.0.0:{}", local_port);
-    let remote_addr = format!("{}:{}", remote_url, remote_port);
+    let _local_addr = format!("0.0.0.0:{local_port}");
+    let remote_addr = format!("{remote_url}:{remote_port}");
 
     // Specify the payload for the packet
     let payload = data_payload.as_bytes();
 
     let result = timeout(
-        Duration::from_secs_f32(timeout_in_seconds),
+        Duration::from_secs_f64(timeout_in_seconds),
         TcpStream::connect(remote_addr),
     )
     .await;
@@ -373,12 +396,12 @@ async fn client_task_tcp(
         );
 
         let result = timeout(
-            Duration::from_secs_f32(timeout_in_seconds),
+            Duration::from_secs_f64(timeout_in_seconds),
             stream.write_all(payload),
         )
         .await;
         match result {
-            Ok(Ok(_)) => {
+            Ok(Ok(())) => {
                 info!(
                     "sent {} bytes to {}",
                     payload.len(),
@@ -401,7 +424,7 @@ async fn client_task_tcp(
         let mut buffer = vec![0; payload.len()];
         info!("waiting for response...");
         let result = timeout(
-            Duration::from_secs_f32(timeout_in_seconds),
+            Duration::from_secs_f64(timeout_in_seconds),
             stream.read_exact(&mut buffer),
         )
         .await;
@@ -428,12 +451,10 @@ async fn client_task_tcp(
             }
         }
 
-        if remaining > 0 {
-            remaining -= 1;
-        }
+        remaining = remaining.saturating_sub(1);
 
         sleep(Duration::from_millis(100)).await;
     }
 
-    info!("tcp client stop")
+    info!("tcp client stop");
 }
