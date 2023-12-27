@@ -123,20 +123,20 @@ async fn main() {
         if protocol == "tcp" {
             client_task_tcp(
                 remote_url.to_string(),
-                remote_port.clone(),
-                local_port.clone(),
-                count.clone(),
-                timeout_in_seconds.clone(),
+                *remote_port,
+                *local_port,
+                *count,
+                *timeout_in_seconds,
                 data_payload.to_string(),
             )
             .await;
         } else {
             client_task_udp(
                 remote_url.to_string(),
-                remote_port.clone(),
-                local_port.clone(),
-                count.clone(),
-                timeout_in_seconds.clone(),
+                *remote_port,
+                *local_port,
+                *count,
+                *timeout_in_seconds,
                 data_payload.to_string(),
             )
             .await;
