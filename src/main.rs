@@ -145,16 +145,30 @@ async fn main() {
         if protocol == "tcp" {
             let server_task: tokio::task::JoinHandle<()> =
                 tokio::spawn(server_thread_tcp(*local_port));
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install CTRL+C signal handler");
+            let result = signal::ctrl_c().await;
+            match result {
+                Ok(()) => {
+                    info!("detected ctrl+c, shutting down...");
+                }
+                Err(e) => {
+                    error!("failed to install CTRL+C signal handler: {e}");
+                    return;
+                }
+            }
             server_task.abort();
         } else {
             let server_task: tokio::task::JoinHandle<()> =
                 tokio::spawn(server_thread_udp(*local_port));
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install CTRL+C signal handler");
+                let result = signal::ctrl_c().await;
+                match result {
+                    Ok(()) => {
+                        info!("detected ctrl+c, shutting down...");
+                    }
+                    Err(e) => {
+                        error!("failed to install CTRL+C signal handler: {e}");
+                        return;
+                    }
+                }
             server_task.abort();
         }
         sleep(Duration::from_millis(1000)).await;
@@ -167,23 +181,24 @@ async fn server_thread_tcp(local_port: u16) {
     info!("server start");
 
     let addr = format!("0.0.0.0:{local_port}");
-    let listener = TcpListener::bind(&addr)
-        .await
-        .expect("failed to create listener");
+    let result = TcpListener::bind(&addr).await;
+    let listener = match result {
+        Ok(listener) => listener,
+        Err(e) => {
+            error!("failed to bind listener: {e}");
+            return;
+        }
+    };
     info!("server listening on {addr}");
 
     let mut count = 0;
 
     loop {
-        let (mut socket, _) = listener
-            .accept()
-            .await
-            .expect("failed to accept connection");
-
-        let peer_addr = match socket.peer_addr() {
-            Ok(addr) => addr,
+        let result = listener.accept().await;
+        let (mut socket, peer_addr) = match result {
+            Ok((socket, peer_addr)) => (socket, peer_addr),
             Err(e) => {
-                error!("failed to get peer address: {e}");
+                error!("failed to accept connection: {e}");
                 return;
             }
         };
@@ -218,8 +233,15 @@ async fn server_thread_udp(local_port: u16) {
     info!("server start");
 
     let addr = format!("0.0.0.0:{local_port}");
-    let socket = UdpSocket::bind(&addr).await.expect("failed to bind socket");
-    info!("server listening on {}", addr);
+    let result = UdpSocket::bind(&addr).await;
+    let socket = match result {
+        Ok(socket) => socket,
+        Err(e) => {
+            error!("failed to bind socket: {e}");
+            return;
+        }
+    };
+    info!("server listening on {addr}");
 
     let mut buf: [u8; 65536] = [0u8; 65536];
     let mut count = 0;
@@ -229,11 +251,22 @@ async fn server_thread_udp(local_port: u16) {
             recv_result = socket.recv_from(&mut buf) => match recv_result {
                 Ok((size, src)) => {
                     count += 1;
-                    info!("[{}] received {} bytes from {}", count, size, src);
-                    socket.send_to(&buf[0..size], &src).await.expect("failed to send data");
+                    info!("[{count}] received {size} bytes from {src}");
+
+                    let result = socket.send_to(&buf[0..size], &src).await;
+                    match result {
+                        Ok(size) => {
+                            info!("sent {size} bytes to {src}");
+                        }
+                        Err(e) => {
+                            error!("error sending data: {e}");
+                            return;
+                        }
+                    }
                 }
                 Err(e) => {
-                    error!("error while receiving data: {}", e);
+                    error!("error while receiving data: {e}");
+                    return;
                 }
             },
             _ = tokio::signal::ctrl_c() => {
