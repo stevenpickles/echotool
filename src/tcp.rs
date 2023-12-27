@@ -50,7 +50,7 @@ pub async fn server_task(local_port: u16) {
                     }
                     Err(e) => {
                         error!("error while receiving data: {e}");
-                        return
+                        return;
                     }
                 }
             }
@@ -83,14 +83,11 @@ pub async fn client_task(
     let mut stream = match result {
         Ok(Ok(stream)) => stream,
         Ok(Err(e)) => {
-            error!("failed to connect: {}", e);
+            error!("failed to connect: {e}");
             return;
         }
         Err(_) => {
-            error!(
-                "timeout: no response received within {} seconds",
-                timeout_in_seconds
-            );
+            error!("timeout: no response received within {timeout_in_seconds} seconds");
             return;
         }
     };

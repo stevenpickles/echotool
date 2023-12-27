@@ -80,7 +80,7 @@ pub async fn client_task(
             )
             .await
             {
-                error!("error: {}", e);
+                error!("error: {e}");
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -94,7 +94,7 @@ pub async fn client_task(
             )
             .await
             {
-                error!("error: {}", e);
+                error!("error: {e}");
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -113,7 +113,7 @@ pub async fn send_receive_echo_packet(
     let socket = UdpSocket::bind(local_addr).await?;
 
     // Send the UDP packet with the specified payload to the remote address
-    info!("sending {} bytes to {}", payload.len(), remote_addr);
+    info!("sending {} bytes to {remote_addr}", payload.len());
     socket.send_to(payload, &remote_addr).await?;
 
     // Buffer to store the received data
@@ -129,7 +129,7 @@ pub async fn send_receive_echo_packet(
 
     match result {
         Ok(Ok((num_bytes, _))) => {
-            info!("received {} bytes", num_bytes);
+            info!("received {num_bytes} bytes");
             let received_payload = &buf[..num_bytes];
             if received_payload == payload {
                 info!("payloads match");
@@ -138,13 +138,10 @@ pub async fn send_receive_echo_packet(
             }
         }
         Ok(Err(e)) => {
-            error!("error receiving data: {}", e);
+            error!("error receiving data: {e}");
         }
         Err(_) => {
-            error!(
-                "timeout: no response received within {} seconds",
-                timeout_in_seconds
-            );
+            error!("timeout: no response received within {timeout_in_seconds} seconds");
         }
     }
 
