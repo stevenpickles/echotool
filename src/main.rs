@@ -287,10 +287,15 @@ async fn client_task_tcp(
     // Specify the payload for the packet
     let payload = data_payload.as_bytes();
 
-    let mut stream = match TcpStream::connect(remote_addr).await {
-        Ok(stream) => stream,
-        Err(e) => {
+    let result = timeout(Duration::from_secs_f32(timeout_in_seconds), TcpStream::connect(remote_addr) ).await;
+    let mut stream = match result {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(e)) => {
             error!("failed to connect: {}", e);
+            return;
+        }
+        Err(_) => {
+            error!("timeout: no response received within {} seconds", timeout_in_seconds);
             return;
         }
     };
