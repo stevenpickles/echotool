@@ -1,4 +1,5 @@
 use clap::ArgMatches;
+use core::fmt;
 use std::error;
 
 #[derive(Debug)]
@@ -7,10 +8,28 @@ pub enum Protocol {
     Udp,
 }
 
+impl fmt::Display for Protocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Tcp => write!(f, "TCP"),
+            Self::Udp => write!(f, "UDP"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Mode {
     Client,
     Server,
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Client => write!(f, "client"),
+            Self::Server => write!(f, "server"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -39,7 +58,7 @@ impl AppConfig {
                 Some(value) => value,
                 None => return Err("remote_url is invalid".into()),
             },
-            Mode::Server => "no-remote-url",
+            Mode::Server => "<none>",
         };
 
         let Some(remote_port) = clargs.get_one::<u16>("remote_port") else {

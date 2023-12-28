@@ -10,6 +10,7 @@ mod udp;
 #[tokio::main]
 async fn main() {
     init_logger();
+    info!("application start");
 
     // Parse command-line arguments
     let clargs = clargs::parse_command_line_args();
@@ -22,7 +23,14 @@ async fn main() {
         }
     };
 
-    info!("application start");
+    info!("protocol: {}", config.protocol);
+    info!("mode: {}", config.mode);
+    info!("remote_url: {}", config.remote_url);
+    info!("remote_port: {}", config.remote_port);
+    info!("local_port: {}", config.local_port);
+    info!("data_payload: {}", config.data_payload);
+    info!("count: {}", config.count);
+    info!("timeout_in_seconds: {0:.2}", config.timeout_in_seconds);
 
     let mode = (config.protocol, config.mode);
     match mode {
