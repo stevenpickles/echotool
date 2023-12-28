@@ -25,12 +25,20 @@ async fn main() {
 
     info!("protocol: {}", config.protocol);
     info!("mode: {}", config.mode);
-    info!("remote_url: {}", config.remote_url);
-    info!("remote_port: {}", config.remote_port);
-    info!("local_port: {}", config.local_port);
-    info!("data_payload: {}", config.data_payload);
-    info!("count: {}", config.count);
-    info!("timeout_in_seconds: {0:.2}", config.timeout_in_seconds);
+
+    match config.mode {
+        app_config::Mode::Client => {
+            info!("remote_url: {}", config.remote_url);
+            info!("remote_port: {}", config.remote_port);
+            info!("local_port: {}", config.local_port);
+            info!("data_payload: {}", config.data_payload);
+            info!("count: {}", config.count);
+            info!("timeout_in_seconds: {0:.2}", config.timeout_in_seconds);
+        }
+        app_config::Mode::Server => {
+            info!("local_port: {}", config.local_port);
+        }
+    }
 
     let mode = (config.protocol, config.mode);
     match mode {
