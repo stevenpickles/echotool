@@ -42,34 +42,16 @@ async fn main() {
     let mode = (config.protocol, config.mode);
     match mode {
         (app_config::Protocol::Tcp, app_config::Mode::Client) => {
-            tcp::client_task(
-                config.remote_url,
-                config.remote_port,
-                config.local_port,
-                config.count,
-                config.timeout_in_seconds,
-                config.data_payload,
-            )
-            .await;
+            Box::pin(tcp::client_task(&config)).await;
         }
         (app_config::Protocol::Tcp, app_config::Mode::Server) => {
-            let server_task = tokio::spawn(tcp::server_task(config.local_port));
-            server_task.abort();
+            Box::pin(tcp::server_task(&config)).await;
         }
         (app_config::Protocol::Udp, app_config::Mode::Client) => {
-            udp::client_task(
-                config.remote_url,
-                config.remote_port,
-                config.local_port,
-                config.count,
-                config.timeout_in_seconds,
-                config.data_payload,
-            )
-            .await;
+            Box::pin(udp::client_task(&config)).await;
         }
         (app_config::Protocol::Udp, app_config::Mode::Server) => {
-            let server_task = tokio::spawn(udp::server_task(config.local_port));
-            server_task.abort();
+            Box::pin(udp::server_task(&config)).await;
         }
     }
 

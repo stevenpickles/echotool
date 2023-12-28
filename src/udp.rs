@@ -1,12 +1,13 @@
+use crate::app_config::AppConfig;
 use log::{error, info};
 use tokio::net::UdpSocket;
 use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
-pub async fn server_task(local_port: u16) {
+pub async fn server_task(config: &AppConfig) {
     info!("udp server start");
 
-    let addr = format!("0.0.0.0:{local_port}");
+    let addr = format!("0.0.0.0:{}", config.local_port);
     let result = UdpSocket::bind(&addr).await;
     let socket = match result {
         Ok(socket) => socket,
@@ -15,7 +16,7 @@ pub async fn server_task(local_port: u16) {
             return;
         }
     };
-    info!("server listening on {addr}");
+    info!("udp server listening on {addr}");
 
     let mut count = 0;
 
@@ -55,29 +56,22 @@ pub async fn server_task(local_port: u16) {
     info!("udp server stop");
 }
 
-pub async fn client_task(
-    remote_url: String,
-    remote_port: u16,
-    local_port: u16,
-    count: u32,
-    timeout_in_seconds: f64,
-    data_payload: String,
-) {
+pub async fn client_task(config: &AppConfig) {
     info!("udp client start");
 
     // Specify the local and remote addresses
-    let local_addr = format!("0.0.0.0:{local_port}");
-    let remote_addr = format!("{remote_url}:{remote_port}");
+    let local_addr = format!("0.0.0.0:{}", config.local_port);
+    let remote_addr = format!("{}:{}", config.remote_url, config.remote_port);
 
     // Specify the payload for the UDP packet
-    let payload = data_payload.as_bytes();
+    let payload = config.data_payload.as_bytes();
 
     // Create a signal stream for Ctrl+C
     let ctrl_c = signal::ctrl_c();
 
     // Call the function to send and receive the UDP echo packet
-    let continue_forever = count == 0;
-    let mut remaining = count;
+    let continue_forever = config.count == 0;
+    let mut remaining = config.count;
 
     tokio::select! {
         () = async {
@@ -86,7 +80,7 @@ pub async fn client_task(
                     local_addr.clone(),
                     remote_addr.clone(),
                     payload,
-                    timeout_in_seconds,
+                    config.timeout_in_seconds,
                 )
                 .await
                 {
