@@ -54,7 +54,12 @@ async fn main() {
         }
         (app_config::Protocol::Tcp, app_config::Mode::Server) => {
             let server_task = tokio::spawn(tcp::server_task(config.local_port));
-            server_task.abort();
+            match server_task.await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("server_task error: {e}");
+                }
+            }
         }
         (app_config::Protocol::Udp, app_config::Mode::Client) => {
             udp::client_task(
@@ -69,7 +74,12 @@ async fn main() {
         }
         (app_config::Protocol::Udp, app_config::Mode::Server) => {
             let server_task = tokio::spawn(udp::server_task(config.local_port));
-            server_task.abort();
+            match server_task.await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("server_task error: {e}");
+                }
+            }
         }
     }
 

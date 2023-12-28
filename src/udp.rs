@@ -15,7 +15,7 @@ pub async fn server_task(local_port: u16) {
             return;
         }
     };
-    info!("server listening on {addr}");
+    info!("udp server listening on {addr}");
 
     let mut count = 0;
 
