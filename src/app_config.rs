@@ -34,8 +34,12 @@ impl AppConfig {
             Mode::Server
         };
 
-        let Some(remote_url) = clargs.get_one::<String>("remote_url") else {
-            return Err("remote_url is invalid".into());
+        let remote_url = match mode {
+            Mode::Client => match clargs.get_one::<String>("remote_url") {
+                Some(value) => value,
+                None => return Err("remote_url is invalid".into()),
+            },
+            Mode::Server => "no-remote-url",
         };
 
         let Some(remote_port) = clargs.get_one::<u16>("remote_port") else {
