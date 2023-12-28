@@ -1,3 +1,4 @@
+use crate::app_config::AppConfig;
 use log::{error, info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -69,29 +70,22 @@ pub async fn server_task(local_port: u16) {
     info!("tcp server stop");
 }
 
-pub async fn client_task(
-    remote_url: String,
-    remote_port: u16,
-    local_port: u16,
-    count: u32,
-    timeout_in_seconds: f64,
-    data_payload: String,
-) {
+pub async fn client_task(config: &AppConfig) {
     info!("tcp client start");
 
     // Specify the local and remote addresses
-    let _local_addr = format!("0.0.0.0:{local_port}");
-    let remote_addr = format!("{remote_url}:{remote_port}");
+    let _local_addr = format!("0.0.0.0:{}", config.local_port);
+    let remote_addr = format!("{}:{}", config.remote_url, config.remote_port);
 
     // Specify the payload for the packet
-    let payload = data_payload.as_bytes();
+    let payload = config.data_payload.as_bytes();
 
     // Create a signal stream for Ctrl+C
     let ctrl_c = signal::ctrl_c();
 
     // Establish TCP connection
     let result = timeout(
-        Duration::from_secs_f64(timeout_in_seconds),
+        Duration::from_secs_f64(config.timeout_in_seconds),
         TcpStream::connect(remote_addr),
     )
     .await;
@@ -102,7 +96,10 @@ pub async fn client_task(
             return;
         }
         Err(_) => {
-            error!("timeout: no response received within {timeout_in_seconds} seconds");
+            error!(
+                "timeout: no response received within {} seconds",
+                config.timeout_in_seconds
+            );
             return;
         }
     };
@@ -117,8 +114,8 @@ pub async fn client_task(
     info!("connected to peer {peer_addr}");
 
     // Call the function to send and receive data over the TCP connection
-    let continue_forever = count == 0;
-    let mut remaining = count;
+    let continue_forever = config.count == 0;
+    let mut remaining = config.count;
 
     tokio::select! {
         () = async {
@@ -127,7 +124,7 @@ pub async fn client_task(
                     &mut stream,
                     peer_addr.to_string(),
                     payload,
-                    timeout_in_seconds,
+                    config.timeout_in_seconds,
                 )
                 .await
                 {

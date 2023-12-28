@@ -2,7 +2,7 @@ use clap::ArgMatches;
 use core::fmt;
 use std::error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Protocol {
     Tcp,
     Udp,
@@ -17,7 +17,7 @@ impl fmt::Display for Protocol {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Mode {
     Client,
     Server,
