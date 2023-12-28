@@ -17,12 +17,12 @@ pub async fn server_task(local_port: u16) {
     };
     info!("server listening on {addr}");
 
-    let mut buf: [u8; 65536] = [0u8; 65536];
     let mut count = 0;
 
     tokio::select! {
         () = async {
             loop {
+                let mut buf: [u8; 65536] = [0u8; 65536];
                 match socket.recv_from(&mut buf).await {
                     Ok((size, src)) => {
                         count += 1;
