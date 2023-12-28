@@ -1,5 +1,6 @@
 use log::{error, info};
 use tokio::net::UdpSocket;
+use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
 pub async fn server_task(local_port: u16) {
@@ -69,24 +70,37 @@ pub async fn client_task(
     // Specify the payload for the UDP packet
     let payload = data_payload.as_bytes();
 
+    // Create a signal stream for Ctrl+C
+    let ctrl_c = signal::ctrl_c();
+
     // Call the function to send and receive the UDP echo packet
     let continue_forever = count == 0;
     let mut remaining = count;
-    while (remaining > 0) || continue_forever {
-        if let Err(e) = send_receive_echo_packet(
-            local_addr.clone(),
-            remote_addr.clone(),
-            payload,
-            timeout_in_seconds,
-        )
-        .await
-        {
-            error!("error: {e}");
+
+    tokio::select! {
+        () = async {
+            while (remaining > 0) || continue_forever {
+                if let Err(e) = send_receive_echo_packet(
+                    local_addr.clone(),
+                    remote_addr.clone(),
+                    payload,
+                    timeout_in_seconds,
+                )
+                .await
+                {
+                    error!("error: {e}");
+                }
+
+                remaining = remaining.saturating_sub(1);
+
+                sleep(Duration::from_millis(100)).await;
+            }
+        } => {}
+
+        _ = ctrl_c => {
+            // Handle Ctrl+C event
+            info!("detected ctrl+c, shutting down...");
         }
-
-        remaining = remaining.saturating_sub(1);
-
-        sleep(Duration::from_millis(100)).await;
     }
 
     info!("client stop");
