@@ -5,7 +5,7 @@ use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
 pub async fn server_task(local_port: u16) {
-    info!("server start");
+    info!("tcp server start");
 
     let addr = format!("0.0.0.0:{local_port}");
     let result = TcpListener::bind(&addr).await;
@@ -16,10 +16,7 @@ pub async fn server_task(local_port: u16) {
             return;
         }
     };
-    info!("server listening on {addr}");
-
-    // Create a signal stream for Ctrl+C
-    let ctrl_c = signal::ctrl_c();
+    info!("tcp server listening on {addr}");
 
     let mut count = 0;
 
@@ -65,11 +62,11 @@ pub async fn server_task(local_port: u16) {
 
         _ = ctrl_c => {
             // Handle Ctrl+C event
-            info!("Received Ctrl+C. Aborting the server task.");
+            info!("detected ctrl+c, shutting down...");
         }
     }
 
-    info!("server stop");
+    info!("tcp server stop");
 }
 
 pub async fn client_task(

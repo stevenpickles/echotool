@@ -4,7 +4,7 @@ use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
 pub async fn server_task(local_port: u16) {
-    info!("server start");
+    info!("udp server start");
 
     let addr = format!("0.0.0.0:{local_port}");
     let result = UdpSocket::bind(&addr).await;
@@ -48,11 +48,11 @@ pub async fn server_task(local_port: u16) {
 
         _ = tokio::signal::ctrl_c() => {
             // Handle Ctrl+C event
-            info!("Received Ctrl+C. Aborting the server task.");
+            info!("detected ctrl+c, shutting down...");
         }
     }
 
-    info!("server stop");
+    info!("udp server stop");
 }
 
 pub async fn client_task(
