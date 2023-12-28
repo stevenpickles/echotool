@@ -18,44 +18,58 @@ pub async fn server_task(local_port: u16) {
     };
     info!("server listening on {addr}");
 
+    // Create a signal stream for Ctrl+C
+    let ctrl_c = signal::ctrl_c();
+
     let mut count = 0;
 
-    loop {
-        let result = listener.accept().await;
-        let (mut socket, peer_addr) = match result {
-            Ok((socket, peer_addr)) => (socket, peer_addr),
-            Err(e) => {
-                error!("failed to accept connection: {e}");
-                return;
-            }
-        };
-        info!("server connected to {peer_addr}");
-
-        tokio::spawn(async move {
+    tokio::select! {
+        () = async {
             loop {
-                let mut buf: [u8; 65536] = [0u8; 65536];
-                match socket.read(&mut buf).await {
-                    Ok(0) => {
-                        info!("connection closed by client {peer_addr}");
-                        break;
-                    }
-                    Ok(n) => {
-                        count += 1;
-                        info!("[{count}] received {n} bytes from {peer_addr}");
-
-                        if let Err(e) = socket.write_all(&buf[..n]).await {
-                            error!("error writing to socket: {e}");
-                            return;
-                        }
-                    }
+                let result = listener.accept().await;
+                let (mut socket, peer_addr) = match result {
+                    Ok((socket, peer_addr)) => (socket, peer_addr),
                     Err(e) => {
-                        error!("error while receiving data: {e}");
+                        error!("failed to accept connection: {e}");
                         return;
                     }
-                }
+                };
+                info!("server connected to {peer_addr}");
+
+                tokio::spawn(async move {
+                    loop {
+                        let mut buf: [u8; 65536] = [0u8; 65536];
+                        match socket.read(&mut buf).await {
+                            Ok(0) => {
+                                info!("connection closed by client {peer_addr}");
+                                break;
+                            }
+                            Ok(n) => {
+                                count += 1;
+                                info!("[{count}] received {n} bytes from {peer_addr}");
+
+                                if let Err(e) = socket.write_all(&buf[..n]).await {
+                                    error!("error writing to socket: {e}");
+                                    return;
+                                }
+                            }
+                            Err(e) => {
+                                error!("error while receiving data: {e}");
+                                return;
+                            }
+                        }
+                    }
+                });
             }
-        });
+        } => {}
+
+        _ = ctrl_c => {
+            // Handle Ctrl+C event
+            info!("Received Ctrl+C. Aborting the server task.");
+        }
     }
+
+    info!("server stop");
 }
 
 pub async fn client_task(

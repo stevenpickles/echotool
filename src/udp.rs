@@ -20,33 +20,35 @@ pub async fn server_task(local_port: u16) {
     let mut buf: [u8; 65536] = [0u8; 65536];
     let mut count = 0;
 
-    loop {
-        tokio::select! {
-            recv_result = socket.recv_from(&mut buf) => match recv_result {
-                Ok((size, src)) => {
-                    count += 1;
-                    info!("[{count}] received {size} bytes from {src}");
+    tokio::select! {
+        () = async {
+            loop {
+                match socket.recv_from(&mut buf).await {
+                    Ok((size, src)) => {
+                        count += 1;
+                        info!("[{count}] received {size} bytes from {src}");
 
-                    let result = socket.send_to(&buf[0..size], &src).await;
-                    match result {
-                        Ok(size) => {
-                            info!("sent {size} bytes to {src}");
-                        }
-                        Err(e) => {
-                            error!("error sending data: {e}");
-                            return;
+                        match socket.send_to(&buf[0..size], &src).await {
+                            Ok(size) => {
+                                info!("sent {size} bytes to {src}");
+                            }
+                            Err(e) => {
+                                error!("error sending data: {e}");
+                                return;
+                            }
                         }
                     }
+                    Err(e) => {
+                        error!("error while receiving data: {e}");
+                        return;
+                    }
                 }
-                Err(e) => {
-                    error!("error while receiving data: {e}");
-                    return;
-                }
-            },
-            _ = tokio::signal::ctrl_c() => {
-                info!("detected ctrl+c, shutting down...");
-                break;
             }
+        } => {}
+
+        _ = tokio::signal::ctrl_c() => {
+            // Handle Ctrl+C event
+            info!("Received Ctrl+C. Aborting the server task.");
         }
     }
 

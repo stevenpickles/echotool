@@ -1,6 +1,5 @@
 use env_logger::Builder;
 use log::{error, info, LevelFilter};
-use tokio::signal;
 
 mod app_config;
 mod clargs;
@@ -55,16 +54,6 @@ async fn main() {
         }
         (app_config::Protocol::Tcp, app_config::Mode::Server) => {
             let server_task = tokio::spawn(tcp::server_task(config.local_port));
-            let result = signal::ctrl_c().await;
-            match result {
-                Ok(()) => {
-                    info!("detected ctrl+c, shutting down...");
-                }
-                Err(e) => {
-                    error!("failed to install ctrl+c signal handler: {e}");
-                    return;
-                }
-            }
             server_task.abort();
         }
         (app_config::Protocol::Udp, app_config::Mode::Client) => {
@@ -80,16 +69,6 @@ async fn main() {
         }
         (app_config::Protocol::Udp, app_config::Mode::Server) => {
             let server_task = tokio::spawn(udp::server_task(config.local_port));
-            let result = signal::ctrl_c().await;
-            match result {
-                Ok(()) => {
-                    info!("detected ctrl+c, shutting down...");
-                }
-                Err(e) => {
-                    error!("failed to install ctrl+c signal handler: {e}");
-                    return;
-                }
-            }
             server_task.abort();
         }
     }
