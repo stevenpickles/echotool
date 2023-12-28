@@ -4,10 +4,10 @@ use tokio::net::UdpSocket;
 use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
-pub async fn server_task(local_port: u16) {
+pub async fn server_task(config: &AppConfig) {
     info!("udp server start");
 
-    let addr = format!("0.0.0.0:{local_port}");
+    let addr = format!("0.0.0.0:{}", config.local_port);
     let result = UdpSocket::bind(&addr).await;
     let socket = match result {
         Ok(socket) => socket,

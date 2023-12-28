@@ -5,10 +5,10 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::signal;
 use tokio::time::{sleep, timeout, Duration};
 
-pub async fn server_task(local_port: u16) {
+pub async fn server_task(config: &AppConfig) {
     info!("tcp server start");
 
-    let addr = format!("0.0.0.0:{local_port}");
+    let addr = format!("0.0.0.0:{}", config.local_port);
     let result = TcpListener::bind(&addr).await;
     let listener = match result {
         Ok(listener) => listener,
