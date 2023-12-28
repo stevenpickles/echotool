@@ -60,7 +60,7 @@ pub async fn server_task(local_port: u16) {
             }
         } => {}
 
-        _ = ctrl_c => {
+        _ = signal::ctrl_c() => {
             // Handle Ctrl+C event
             info!("detected ctrl+c, shutting down...");
         }
