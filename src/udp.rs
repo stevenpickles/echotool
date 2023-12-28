@@ -70,34 +70,23 @@ pub async fn client_task(
     let payload = data_payload.as_bytes();
 
     // Call the function to send and receive the UDP echo packet
-    if count == 0 {
-        loop {
-            if let Err(e) = send_receive_echo_packet(
-                local_addr.clone(),
-                remote_addr.clone(),
-                payload,
-                timeout_in_seconds,
-            )
-            .await
-            {
-                error!("error: {e}");
-            }
-            sleep(Duration::from_millis(100)).await;
+    let continue_forever = count == 0;
+    let mut remaining = count;
+    while (remaining > 0) || continue_forever {
+        if let Err(e) = send_receive_echo_packet(
+            local_addr.clone(),
+            remote_addr.clone(),
+            payload,
+            timeout_in_seconds,
+        )
+        .await
+        {
+            error!("error: {e}");
         }
-    } else {
-        for _i in 0..count {
-            if let Err(e) = send_receive_echo_packet(
-                local_addr.clone(),
-                remote_addr.clone(),
-                payload,
-                timeout_in_seconds,
-            )
-            .await
-            {
-                error!("error: {e}");
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
+
+        remaining = remaining.saturating_sub(1);
+
+        sleep(Duration::from_millis(100)).await;
     }
 
     info!("client stop");
