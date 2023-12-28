@@ -61,7 +61,7 @@ pub async fn client_task(
     timeout_in_seconds: f64,
     data_payload: String,
 ) {
-    info!("client start");
+    info!("udp client start");
 
     // Specify the local and remote addresses
     let local_addr = format!("0.0.0.0:{local_port}");
@@ -103,7 +103,7 @@ pub async fn client_task(
         }
     }
 
-    info!("client stop");
+    info!("udp client stop");
 }
 
 pub async fn send_receive_echo_packet(
@@ -117,23 +117,39 @@ pub async fn send_receive_echo_packet(
 
     // Send the UDP packet with the specified payload to the remote address
     info!("sending {} bytes to {remote_addr}", payload.len());
-    socket.send_to(payload, &remote_addr).await?;
-
-    // Buffer to store the received data
-    let mut buf = vec![0; payload.len()];
-
-    // Receive the response from the server
-    info!("receiving response...");
     let result = timeout(
         Duration::from_secs_f64(timeout_in_seconds),
-        socket.recv_from(&mut buf),
+        socket.send_to(payload, &remote_addr),
+    )
+    .await;
+    match result {
+        Ok(Ok(size)) => {
+            info!("sent {size} bytes to {remote_addr}");
+        }
+        Ok(Err(e)) => {
+            return Err(format!("error sending data: {e}").into());
+        }
+        Err(_) => {
+            return Err(format!(
+                "timeout: no response received within {timeout_in_seconds} seconds"
+            )
+            .into());
+        }
+    }
+
+    // Receiving response
+    let mut buffer = vec![0; payload.len()];
+    info!("waiting for response...");
+    let result = timeout(
+        Duration::from_secs_f64(timeout_in_seconds),
+        socket.recv_from(&mut buffer),
     )
     .await;
 
     match result {
         Ok(Ok((num_bytes, _))) => {
             info!("received {num_bytes} bytes");
-            let received_payload = &buf[..num_bytes];
+            let received_payload = &buffer[..num_bytes];
             if received_payload == payload {
                 info!("payloads match");
             } else {
