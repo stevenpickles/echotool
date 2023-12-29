@@ -9,10 +9,11 @@ mod udp;
 #[tokio::main]
 async fn main() {
     init_logger();
-    info!("application start");
 
     // Parse command-line arguments
     let clargs = clargs::parse_command_line_args();
+
+    info!("application start");
 
     let config = match app_config::AppConfig::new(&clargs) {
         Ok(config) => config,
