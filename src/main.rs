@@ -22,6 +22,23 @@ async fn main() {
         }
     };
 
+    print_config_info(&config);
+
+    run_application(&config).await;
+
+    info!("application end");
+}
+
+fn init_logger() {
+    // Initialize the logger (env_logger)
+    let mut builder = Builder::new();
+    builder.format_timestamp_micros();
+    builder.filter_level(LevelFilter::Info);
+    builder.target(env_logger::Target::Stdout);
+    builder.init();
+}
+
+fn print_config_info(config: &app_config::AppConfig) {
     info!("protocol: {}", config.protocol);
     info!("mode: {}", config.mode);
 
@@ -38,31 +55,22 @@ async fn main() {
             info!("local_port: {}", config.local_port);
         }
     }
+}
 
+async fn run_application(config: &app_config::AppConfig) {
     let mode = (config.protocol, config.mode);
     match mode {
         (app_config::Protocol::Tcp, app_config::Mode::Client) => {
-            Box::pin(tcp::client_task(&config)).await;
+            Box::pin(tcp::client_task(config)).await;
         }
         (app_config::Protocol::Tcp, app_config::Mode::Server) => {
-            Box::pin(tcp::server_task(&config)).await;
+            Box::pin(tcp::server_task(config)).await;
         }
         (app_config::Protocol::Udp, app_config::Mode::Client) => {
-            Box::pin(udp::client_task(&config)).await;
+            Box::pin(udp::client_task(config)).await;
         }
         (app_config::Protocol::Udp, app_config::Mode::Server) => {
-            Box::pin(udp::server_task(&config)).await;
+            Box::pin(udp::server_task(config)).await;
         }
     }
-
-    info!("application end");
-}
-
-fn init_logger() {
-    // Initialize the logger (env_logger)
-    let mut builder = Builder::new();
-    builder.format_timestamp_micros();
-    builder.filter_level(LevelFilter::Info);
-    builder.target(env_logger::Target::Stdout);
-    builder.init();
 }
